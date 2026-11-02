@@ -1,17 +1,26 @@
 import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { Check, X, HelpCircle } from 'lucide-react';
 import { useGame } from '../store/gameStore';
 import { playCorrectSound, playWrongSound, playFailSound } from '../utils/sounds';
 
 const OPTION_LABELS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
 
-const optionColors: Record<string, string> = {
-  A: 'from-blue-600/90 to-blue-800/90 hover:from-blue-500 hover:to-blue-700 border-blue-400/40',
-  B: 'from-emerald-600/90 to-emerald-800/90 hover:from-emerald-500 hover:to-emerald-700 border-emerald-400/40',
-  C: 'from-amber-600/90 to-amber-800/90 hover:from-amber-500 hover:to-amber-700 border-amber-400/40',
-  D: 'from-purple-600/90 to-purple-800/90 hover:from-purple-500 hover:to-purple-700 border-purple-400/40',
-};
+function getQuestionFontSizeClass(length: number): string {
+  if (length > 450) {
+    return 'text-sm sm:text-base md:text-lg lg:text-xl xl:text-[22px] leading-relaxed max-w-[1450px]';
+  }
+  if (length > 280) {
+    return 'text-base sm:text-lg md:text-xl lg:text-2xl xl:text-[26px] leading-relaxed max-w-[1350px]';
+  }
+  if (length > 150) {
+    return 'text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-[32px] leading-relaxed max-w-[1250px]';
+  }
+  if (length > 80) {
+    return 'text-xl sm:text-2xl md:text-3xl lg:text-4xl leading-relaxed max-w-[1150px]';
+  }
+  return 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl leading-relaxed max-w-[1050px]';
+}
 
 export default function QuestionModal() {
   const { state, answerQuestion, closeQuestion } = useGame();
@@ -20,16 +29,12 @@ export default function QuestionModal() {
     (q) => q.id === state.activeQuestionId,
   );
 
-  const [selectedAnswer, setSelectedAnswer] = useState<'A' | 'B' | 'C' | 'D' | null>(null);
-  const [resultMessage, setResultMessage] = useState<string | null>(null);
-  const [resultType, setResultType] = useState<'correct' | 'wrong' | 'failed' | null>(null);
+  const [correctAnswer, setCorrectAnswer] = useState<'A' | 'B' | 'C' | 'D' | null>(null);
   const [isLocked, setIsLocked] = useState(false);
 
   // Reset local state when active question changes
   useEffect(() => {
-    setSelectedAnswer(null);
-    setResultMessage(null);
-    setResultType(null);
+    setCorrectAnswer(null);
     setIsLocked(false);
   }, [state.activeQuestionId]);
 
@@ -37,35 +42,23 @@ export default function QuestionModal() {
     (answer: 'A' | 'B' | 'C' | 'D') => {
       if (isLocked) return;
 
-      setSelectedAnswer(answer);
-      setIsLocked(true);
-
       const result = answerQuestion(answer);
 
       if (result === 'correct') {
+        setIsLocked(true);
+        setCorrectAnswer(answer);
         if (state.isSoundOn) playCorrectSound();
-        setResultMessage('CHÍNH XÁC! 🎉');
-        setResultType('correct');
         setTimeout(() => {
           closeQuestion();
-        }, 1500);
+        }, 1000);
       } else if (result === 'wrong') {
         if (state.isSoundOn) playWrongSound();
-        setResultMessage('SAI RỒI! ❌');
-        setResultType('wrong');
-        setTimeout(() => {
-          setResultMessage(null);
-          setResultType(null);
-          setSelectedAnswer(null);
-          setIsLocked(false);
-        }, 1200);
       } else if (result === 'failed') {
+        setIsLocked(true);
         if (state.isSoundOn) playFailSound();
-        setResultMessage('HẾT LƯỢT! 🔒');
-        setResultType('failed');
         setTimeout(() => {
           closeQuestion();
-        }, 2000);
+        }, 1200);
       }
     },
     [answerQuestion, closeQuestion, isLocked, state.isSoundOn],
@@ -73,37 +66,42 @@ export default function QuestionModal() {
 
   if (!question) return null;
 
-  const disabledOptions = new Set(question.wrongAnswers);
+  const rawText = question.text || '';
+  const formattedText = rawText
+    .replace(/\s*\/n\s*/g, '\n')
+    .replace(/\s*\\n\s*/g, '\n')
+    .trim();
+
   const attemptsLeft = 3 - question.wrongAnswers.length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 lg:p-8">
       {/* Dark backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/85 backdrop-blur-md"
+        className="absolute inset-0 bg-black/90 backdrop-blur-md"
       />
 
-      {/* Main modal card */}
+      {/* Main modal card - near full screen layout */}
       <motion.div
-        initial={{ scale: 0.9, y: 30, opacity: 0 }}
-        animate={{ scale: 1, y: 0, opacity: 1 }}
-        exit={{ scale: 0.9, y: 30, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        className="relative z-10 w-full max-w-4xl bg-gradient-to-br from-[#0c1836] via-[#10234e] to-[#09142b] rounded-3xl border-2 border-amber-400/60 shadow-[0_0_60px_rgba(251,191,36,0.25)] overflow-hidden flex flex-col"
+        initial={{ scale: 0.94, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.94, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+        className="relative z-10 w-full max-w-[1550px] h-full max-h-[94vh] bg-gradient-to-br from-[#091329] via-[#0e2148] to-[#060e1d] rounded-2xl sm:rounded-3xl border-2 border-amber-400/60 shadow-[0_0_80px_rgba(251,191,36,0.3)] flex flex-col justify-between overflow-hidden"
       >
         {/* Top bar with question badge, attempts left, and MC close button */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-amber-500/20 bg-slate-900/40">
-          <div className="flex items-center gap-3">
-            <span className="px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-sm tracking-wider uppercase shadow-md flex items-center gap-1.5">
-              <HelpCircle className="w-4 h-4" /> MẢNH GHÉP SỐ {question.id}
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-8 py-2.5 sm:py-3 border-b border-amber-500/20 bg-slate-900/60">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <span className="px-3.5 sm:px-5 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-xs sm:text-sm md:text-base tracking-wider uppercase shadow-md flex items-center gap-1.5 sm:gap-2">
+              <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" /> MẢNH GHÉP SỐ {question.id}
             </span>
-            <span className="text-xs sm:text-sm font-semibold text-slate-300">
+            <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-300">
               Còn lại:{' '}
               <span className={`font-bold ${attemptsLeft === 1 ? 'text-red-400' : 'text-amber-400'}`}>
-                {attemptsLeft} lần thử
+                {attemptsLeft} lượt chọn
               </span>
             </span>
           </div>
@@ -111,67 +109,68 @@ export default function QuestionModal() {
           <button
             type="button"
             onClick={closeQuestion}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
             title="Đóng câu hỏi (MC)"
           >
-            <X className="w-6 h-6" />
+            <X className="w-6 h-6 sm:w-7 sm:h-7" />
           </button>
         </div>
 
-        {/* Question text */}
-        <div className="px-6 sm:px-10 py-6 sm:py-8 text-center">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white leading-relaxed tracking-wide drop-shadow-md">
-            {question.text}
-          </h2>
+        {/* Question text container - centered with dynamic font sizing and smooth overflow handling */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 md:px-14 py-2 sm:py-4 flex">
+          <div className="m-auto w-full flex flex-col items-center">
+            <h2
+              className={`font-extrabold text-white text-center tracking-wide drop-shadow-md select-none whitespace-pre-line ${getQuestionFontSizeClass(
+                formattedText.length,
+              )}`}
+            >
+              {formattedText}
+            </h2>
+          </div>
         </div>
 
-        {/* Options grid (2x2) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-6 sm:px-10 pb-8">
+        {/* Options grid (2x2) - filling bottom portion comfortably */}
+        <div className="shrink-0 grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3.5 lg:gap-4 px-4 sm:px-8 md:px-14 pb-3 sm:pb-5 pt-1.5">
           {OPTION_LABELS.map((letter) => {
             const option = question.options.find((o) => o.id === letter);
             if (!option) return null;
 
-            const isDisabled = disabledOptions.has(letter);
-            const isSelected = selectedAnswer === letter;
-            const isCorrectAnswer = isSelected && resultType === 'correct';
-            const isWrongAnswer = isSelected && (resultType === 'wrong' || resultType === 'failed');
+            const isCorrect =
+              correctAnswer === letter ||
+              (question.status === 'completed_correct' && question.correctAnswer === letter);
+            const isWrong = question.wrongAnswers.includes(letter);
+            const isDisabled = isWrong || isCorrect || isLocked;
 
             let btnClasses =
-              'relative flex items-center gap-4 px-5 py-4 sm:py-5 rounded-2xl border-2 text-left font-bold text-lg sm:text-xl transition-all duration-200 ';
+              'relative flex items-center gap-3 sm:gap-4 px-3.5 sm:px-5 py-2.5 sm:py-3 lg:py-3.5 rounded-xl sm:rounded-2xl border-2 text-left font-bold transition-all duration-150 min-h-[56px] sm:min-h-[64px] lg:min-h-[72px] ';
 
-            if (isCorrectAnswer) {
-              btnClasses +=
-                'bg-emerald-600 border-emerald-400 text-white shadow-[0_0_30px_rgba(16,185,129,0.7)] scale-[1.02]';
-            } else if (isWrongAnswer) {
-              btnClasses +=
-                'bg-red-600 border-red-400 text-white shadow-[0_0_30px_rgba(239,68,68,0.7)] scale-[0.98]';
-            } else if (isDisabled) {
-              btnClasses +=
-                'bg-red-950/60 border-red-900/50 text-red-400/40 cursor-not-allowed opacity-60';
+            if (isCorrect) {
+              btnClasses += 'bg-emerald-600 border-emerald-400 text-white shadow-[0_0_25px_rgba(16,185,129,0.5)] cursor-default';
+            } else if (isWrong) {
+              btnClasses += 'bg-red-700/85 border-red-500 text-white cursor-not-allowed opacity-80';
             } else {
-              btnClasses += `bg-gradient-to-r ${optionColors[letter]} text-white cursor-pointer hover:border-yellow-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]`;
+              btnClasses +=
+                'bg-slate-800/95 hover:bg-slate-700/95 border-slate-600/80 hover:border-amber-400 text-white cursor-pointer active:scale-[0.99]';
             }
 
             return (
               <button
                 key={letter}
                 type="button"
-                disabled={isDisabled || isLocked}
+                disabled={isDisabled}
                 onClick={() => handleAnswer(letter)}
                 className={btnClasses}
               >
                 {/* Option Letter Badge */}
                 <span
                   className={`
-                    w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-black text-xl shrink-0 shadow-inner
+                    w-8 h-8 sm:w-10 sm:h-10 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center font-black text-base sm:text-lg lg:text-xl shrink-0 shadow-inner
                     ${
-                      isCorrectAnswer
+                      isCorrect
                         ? 'bg-white text-emerald-700'
-                        : isWrongAnswer
-                          ? 'bg-white text-red-700'
-                          : isDisabled
-                            ? 'bg-red-900/40 text-red-400/50'
-                            : 'bg-white/20 text-yellow-300'
+                        : isWrong
+                          ? 'bg-red-950/70 text-red-200'
+                          : 'bg-white/10 text-amber-300'
                     }
                   `}
                 >
@@ -179,45 +178,17 @@ export default function QuestionModal() {
                 </span>
 
                 {/* Option text */}
-                <span className="flex-1 break-words">{option.text}</span>
+                <span className="flex-1 text-sm sm:text-base lg:text-lg font-bold leading-snug break-words">
+                  {option.text}
+                </span>
 
                 {/* Result Icons */}
-                {isCorrectAnswer && <Check className="w-8 h-8 text-white shrink-0" />}
-                {(isWrongAnswer || isDisabled) && (
-                  <X className="w-8 h-8 text-red-300/80 shrink-0" />
-                )}
+                {isCorrect && <Check className="w-6 h-6 sm:w-7 sm:h-7 text-white shrink-0" />}
+                {isWrong && <X className="w-6 h-6 sm:w-7 sm:h-7 text-red-200 shrink-0" />}
               </button>
             );
           })}
         </div>
-
-        {/* Big Animated Result Banner */}
-        <AnimatePresence>
-          {resultMessage && (
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 1.2, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-              className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-none"
-            >
-              <div
-                className={`
-                  px-8 py-4 sm:px-12 sm:py-6 rounded-3xl border-4 text-4xl sm:text-6xl font-black tracking-wider uppercase shadow-2xl
-                  ${
-                    resultType === 'correct'
-                      ? 'bg-emerald-950/95 border-emerald-400 text-emerald-300 shadow-[0_0_60px_rgba(16,185,129,0.8)]'
-                      : resultType === 'wrong'
-                        ? 'bg-red-950/95 border-red-500 text-red-300 shadow-[0_0_60px_rgba(239,68,68,0.8)]'
-                        : 'bg-amber-950/95 border-amber-500 text-amber-300 shadow-[0_0_60px_rgba(245,158,11,0.8)]'
-                  }
-                `}
-              >
-                {resultMessage}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </motion.div>
     </div>
   );

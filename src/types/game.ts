@@ -48,9 +48,23 @@ export interface SetupQuestion {
   correctAnswer: 'A' | 'B' | 'C' | 'D';
 }
 
+export interface QuestionSet {
+  id: number; // 1 to 5
+  name: string;
+  topicKeyword: string;
+  topicImage: string;
+  questions: SetupQuestion[];
+}
+
 export interface ExportData {
   topicKeyword: string;
   questions: SetupQuestion[];
-  // topicImage is excluded from JSON export due to size
+  topicImage?: string;
+  name?: string;
+}
+
+export interface MultiSetExportData {
+  version: number;
+  sets: QuestionSet[];
 }
 

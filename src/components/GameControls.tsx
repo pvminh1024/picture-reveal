@@ -9,16 +9,16 @@ import {
   VolumeX,
   Maximize,
   RotateCcw,
-  Home,
+  Settings,
   Eye,
 } from 'lucide-react';
 
 interface GameControlsProps {
-  onGoHome: () => void;
+  onGoHome?: () => void;
 }
 
 export default function GameControls({ onGoHome }: GameControlsProps) {
-  const { state, togglePause, toggleSound, resetGame, revealTopic } = useGame();
+  const { state, togglePause, toggleSound, resetGame, revealTopic, navigateTo } = useGame();
   const { showToast } = useToast();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showRevealConfirm, setShowRevealConfirm] = useState(false);
@@ -48,7 +48,11 @@ export default function GameControls({ onGoHome }: GameControlsProps) {
 
   const handleGoHome = () => {
     setShowHomeConfirm(false);
-    onGoHome();
+    if (onGoHome) {
+      onGoHome();
+    } else {
+      navigateTo('/admin');
+    }
   };
 
   return (
@@ -103,20 +107,21 @@ export default function GameControls({ onGoHome }: GameControlsProps) {
           <span className="hidden sm:inline">Reset</span>
         </button>
 
-        {/* Home */}
+        {/* Go to Admin */}
         <button
           onClick={() => setShowHomeConfirm(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-700/80 hover:bg-slate-600 text-white font-semibold transition-all hover:scale-105 border border-slate-600"
-          title="Về trang chủ"
+          title="Quản lý bộ đề & chỉnh sửa câu hỏi (/admin)"
         >
-          <Home className="w-5 h-5" />
+          <Settings className="w-5 h-5 text-amber-400" />
+          <span className="hidden sm:inline">Thiết lập</span>
         </button>
       </div>
 
       <ConfirmModal
         isOpen={showResetConfirm}
         title="Reset lượt chơi"
-        message="Bạn có chắc muốn reset? Toàn bộ tiến trình sẽ bị xóa."
+        message="Bạn có chắc muốn reset? Toàn bộ tiến trình lượt này sẽ bị xóa."
         confirmText="Reset"
         onConfirm={handleReset}
         onCancel={() => setShowResetConfirm(false)}
@@ -135,12 +140,12 @@ export default function GameControls({ onGoHome }: GameControlsProps) {
 
       <ConfirmModal
         isOpen={showHomeConfirm}
-        title="Về trang chủ"
-        message="Bạn có chắc muốn quay về trang thiết lập? Tiến trình hiện tại sẽ bị mất."
-        confirmText="Đồng ý"
+        title="Vào trang quản lý (/admin)"
+        message="Bạn có muốn chuyển sang màn hình quản lý bộ đề (/admin) để chỉnh sửa câu hỏi không?"
+        confirmText="Đến /admin"
         onConfirm={handleGoHome}
         onCancel={() => setShowHomeConfirm(false)}
-        variant="warning"
+        variant="info"
       />
     </>
   );

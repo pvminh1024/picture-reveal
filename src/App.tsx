@@ -1,11 +1,16 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { GameState, GameConfig } from './types/game';
+import type { GameState, QuestionSet } from './types/game';
 import {
   GameContext,
   getInitialGameState,
   saveGameState,
   loadGameState,
-  saveGameConfig,
+  loadQuestionSets,
+  loadActiveSetId,
+  saveActiveSetId,
+  createConfigFromSet,
+  loadGameRules,
+  saveGameRules,
 } from './store/gameStore';
 import { playTileOpenSound, playClickSound } from './utils/sounds';
 import SetupPage from './components/SetupPage';
@@ -13,25 +18,115 @@ import GamePage from './components/GamePage';
 import { ToastProvider } from './components/Toast';
 
 function App() {
-  const [state, setState] = useState<GameState>(() => {
-    const saved = loadGameState();
-    if (saved && saved.config && saved.currentScreen === 'game') {
-      return saved;
-    }
-    return getInitialGameState();
+  // Question sets management (1 to 5 sets)
+  const [questionSets, setQuestionSets] = useState<QuestionSet[]>(() => loadQuestionSets());
+  const [activeSetId, setActiveSetId] = useState<number>(() => {
+    const sets = loadQuestionSets();
+    const savedId = loadActiveSetId();
+    return sets.some((s) => s.id === savedId) ? savedId : sets[0]?.id || 1;
   });
 
-  // Save state to localStorage on change
+  // Game rules state
+  const [gameRules, setGameRules] = useState<string>(() => loadGameRules());
+  const updateGameRules = useCallback((rules: string) => {
+    setGameRules(rules);
+    saveGameRules(rules);
+  }, []);
+
+  // Routing: / is Game screen, /admin is Setup/Question editor
+  const [currentRoute, setCurrentRoute] = useState<'/' | '/admin'>(() => {
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    if (path.includes('/admin') || hash.includes('admin')) {
+      return '/admin';
+    }
+    return '/';
+  });
+
+  // Listen to browser Back/Forward buttons and Hash changes
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path.includes('/admin') || hash.includes('admin')) {
+        setCurrentRoute('/admin');
+      } else {
+        setCurrentRoute('/');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handlePopState);
+    };
+  }, []);
+
+  const navigateTo = useCallback((path: '/' | '/admin') => {
+    try {
+      window.history.pushState({}, '', path);
+    } catch {
+      // In case of restricted file:// or local environment fallback to hash
+      window.location.hash = path === '/admin' ? 'admin' : '';
+    }
+    setCurrentRoute(path);
+  }, []);
+
+  // Main game state
+  const [state, setState] = useState<GameState>(() => {
+    const saved = loadGameState();
+    const sets = loadQuestionSets();
+    const curId = loadActiveSetId();
+    const activeSet = sets.find((s) => s.id === curId) || sets[0];
+
+    if (saved && saved.config && saved.config.questions?.length === 9) {
+      return saved;
+    }
+
+    const initial = getInitialGameState();
+    if (activeSet) {
+      initial.config = createConfigFromSet(activeSet);
+    }
+    return initial;
+  });
+
+  // Auto-save game state to localStorage
   useEffect(() => {
     saveGameState(state);
   }, [state]);
+
+  // Switch between question sets (1 to 5)
+  const switchQuestionSet = useCallback(
+    (targetSetId: number) => {
+      const targetSet = questionSets.find((s) => s.id === targetSetId) || questionSets[0];
+      if (!targetSet) return;
+
+      setActiveSetId(targetSet.id);
+      saveActiveSetId(targetSet.id);
+
+      const newConfig = createConfigFromSet(targetSet);
+      setState({
+        config: newConfig,
+        currentScreen: 'game',
+        activeQuestionId: null,
+        openedTiles: [],
+        isPaused: false,
+        isSoundOn: true,
+        isGameOver: false,
+        winnerTeam: null,
+        guessAttempts: [],
+      });
+    },
+    [questionSets]
+  );
 
   const selectTile = useCallback((tileId: number) => {
     setState((prev) => {
       if (!prev.config) return prev;
       const question = prev.config.questions.find((q) => q.id === tileId);
       if (!question) return prev;
-      if (question.status !== 'not_started') return prev;
+      if (question.status === 'completed_correct' || question.status === 'completed_failed') return prev;
       if (prev.activeQuestionId !== null) return prev;
       if (prev.isPaused || prev.isGameOver) return prev;
 
@@ -49,59 +144,53 @@ function App() {
     });
   }, []);
 
-  const answerQuestion = useCallback((answer: 'A' | 'B' | 'C' | 'D'): 'correct' | 'wrong' | 'failed' => {
-    let result: 'correct' | 'wrong' | 'failed' = 'wrong';
-
-    setState((prev) => {
-      if (!prev.config || prev.activeQuestionId === null) return prev;
-      const questionIndex = prev.config.questions.findIndex((q) => q.id === prev.activeQuestionId);
-      if (questionIndex === -1) return prev;
-      const question = prev.config.questions[questionIndex];
+  const answerQuestion = useCallback(
+    (answer: 'A' | 'B' | 'C' | 'D'): 'correct' | 'wrong' | 'failed' => {
+      if (!state.config || state.activeQuestionId === null) return 'wrong';
+      const questionIndex = state.config.questions.findIndex((q) => q.id === state.activeQuestionId);
+      if (questionIndex === -1) return 'wrong';
+      const question = state.config.questions[questionIndex];
 
       if (answer === question.correctAnswer) {
-        result = 'correct';
-        const updatedQuestions = [...prev.config.questions];
+        const updatedQuestions = [...state.config.questions];
         updatedQuestions[questionIndex] = {
           ...question,
           status: 'completed_correct' as const,
         };
 
-        return {
-          ...prev,
-          config: { ...prev.config, questions: updatedQuestions },
-        };
+        setState((prev) => {
+          if (!prev.config) return prev;
+          return {
+            ...prev,
+            config: { ...prev.config, questions: updatedQuestions },
+          };
+        });
+
+        return 'correct';
       } else {
         const newWrongAnswers = [...question.wrongAnswers, answer];
+        const isFailed = newWrongAnswers.length >= 3;
 
-        if (newWrongAnswers.length >= 3) {
-          result = 'failed';
-          const updatedQuestions = [...prev.config.questions];
-          updatedQuestions[questionIndex] = {
-            ...question,
-            wrongAnswers: newWrongAnswers,
-            status: 'completed_failed' as const,
-          };
+        const updatedQuestions = [...state.config.questions];
+        updatedQuestions[questionIndex] = {
+          ...question,
+          wrongAnswers: newWrongAnswers,
+          status: isFailed ? ('completed_failed' as const) : ('in_progress' as const),
+        };
+
+        setState((prev) => {
+          if (!prev.config) return prev;
           return {
             ...prev,
             config: { ...prev.config, questions: updatedQuestions },
           };
-        } else {
-          result = 'wrong';
-          const updatedQuestions = [...prev.config.questions];
-          updatedQuestions[questionIndex] = {
-            ...question,
-            wrongAnswers: newWrongAnswers,
-          };
-          return {
-            ...prev,
-            config: { ...prev.config, questions: updatedQuestions },
-          };
-        }
+        });
+
+        return isFailed ? 'failed' : 'wrong';
       }
-    });
-
-    return result;
-  }, []);
+    },
+    [state.config, state.activeQuestionId]
+  );
 
   const closeQuestion = useCallback(() => {
     setState((prev) => {
@@ -199,32 +288,15 @@ function App() {
     }, 1200);
   }, []);
 
-  const handleStartGame = useCallback((config: GameConfig) => {
-    saveGameConfig(config);
-    setState({
-      config,
-      currentScreen: 'game',
-      activeQuestionId: null,
-      openedTiles: [],
-      isPaused: false,
-      isSoundOn: true,
-      isGameOver: false,
-      winnerTeam: null,
-      guessAttempts: [],
-    });
-  }, []);
-
-  const handleGoHome = useCallback(() => {
-    setState((prev) => ({
-      ...getInitialGameState(),
-      config: prev.config,
-      currentScreen: 'setup',
-    }));
-  }, []);
-
   const contextValue = {
     state,
     setState,
+    questionSets,
+    setQuestionSets,
+    activeSetId,
+    setActiveSetId,
+    gameRules,
+    updateGameRules,
     selectTile,
     answerQuestion,
     closeQuestion,
@@ -233,16 +305,15 @@ function App() {
     togglePause,
     toggleSound,
     revealTopic,
+    switchQuestionSet,
+    navigateTo,
+    currentRoute,
   };
 
   return (
     <ToastProvider>
       <GameContext.Provider value={contextValue}>
-        {state.currentScreen === 'setup' ? (
-          <SetupPage initialConfig={state.config} onStartGame={handleStartGame} />
-        ) : (
-          <GamePage onGoHome={handleGoHome} />
-        )}
+        {currentRoute === '/admin' ? <SetupPage /> : <GamePage />}
       </GameContext.Provider>
     </ToastProvider>
   );
