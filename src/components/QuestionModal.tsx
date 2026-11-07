@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { Check, X, HelpCircle } from 'lucide-react';
 import { useGame } from '../store/gameStore';
-import { playCorrectSound, playWrongSound, playFailSound } from '../utils/sounds';
+import { playCorrectSound, playWrongSound, playFailSound, playTileOpenSound } from '../utils/sounds';
 
 const OPTION_LABELS: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
 
@@ -47,21 +47,20 @@ export default function QuestionModal() {
       if (result === 'correct') {
         setIsLocked(true);
         setCorrectAnswer(answer);
-        if (state.isSoundOn) playCorrectSound();
-        setTimeout(() => {
-          closeQuestion();
-        }, 1000);
+        if (state.isSoundOn) {
+          playCorrectSound();
+          playTileOpenSound();
+        }
+        // Không tự tắt câu hỏi: để người dùng tự bấm nút X góc trên bên phải
       } else if (result === 'wrong') {
         if (state.isSoundOn) playWrongSound();
       } else if (result === 'failed') {
         setIsLocked(true);
         if (state.isSoundOn) playFailSound();
-        setTimeout(() => {
-          closeQuestion();
-        }, 1200);
+        // Không tự tắt câu hỏi: để người dùng tự bấm nút X góc trên bên phải
       }
     },
-    [answerQuestion, closeQuestion, isLocked, state.isSoundOn],
+    [answerQuestion, isLocked, state.isSoundOn],
   );
 
   if (!question) return null;
@@ -72,7 +71,11 @@ export default function QuestionModal() {
     .replace(/\s*\\n\s*/g, '\n')
     .trim();
 
-  const attemptsLeft = 3 - question.wrongAnswers.length;
+  const isCompletedCorrect =
+    question.status === 'completed_correct' || correctAnswer !== null;
+  const isCompletedFailed =
+    question.status === 'completed_failed' || question.wrongAnswers.length >= 3;
+  const attemptsLeft = Math.max(0, 3 - question.wrongAnswers.length);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 lg:p-8">
@@ -92,26 +95,43 @@ export default function QuestionModal() {
         transition={{ type: 'spring', stiffness: 320, damping: 28 }}
         className="relative z-10 w-full max-w-[1550px] h-full max-h-[94vh] bg-gradient-to-br from-[#091329] via-[#0e2148] to-[#060e1d] rounded-2xl sm:rounded-3xl border-2 border-amber-400/60 shadow-[0_0_80px_rgba(251,191,36,0.3)] flex flex-col justify-between overflow-hidden"
       >
-        {/* Top bar with question badge, attempts left, and MC close button */}
+        {/* Top bar with question badge, status, and MC close button */}
         <div className="shrink-0 flex items-center justify-between px-4 sm:px-8 py-2.5 sm:py-3 border-b border-amber-500/20 bg-slate-900/60">
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
             <span className="px-3.5 sm:px-5 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-xs sm:text-sm md:text-base tracking-wider uppercase shadow-md flex items-center gap-1.5 sm:gap-2">
               <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" /> MẢNH GHÉP SỐ {question.id}
             </span>
-            <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-300">
-              Còn lại:{' '}
-              <span className={`font-bold ${attemptsLeft === 1 ? 'text-red-400' : 'text-amber-400'}`}>
-                {attemptsLeft} lượt chọn
+
+            {isCompletedCorrect ? (
+              <span className="px-3 sm:px-4 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs sm:text-sm md:text-base flex items-center gap-1.5 animate-fadeIn">
+                <Check className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" /> Trả lời chính xác!
               </span>
-            </span>
+            ) : isCompletedFailed ? (
+              <span className="px-3 sm:px-4 py-1 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 font-bold text-xs sm:text-sm md:text-base flex items-center gap-1.5 animate-fadeIn">
+                <X className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" /> Hết lượt!
+              </span>
+            ) : (
+              <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-300">
+                Còn lại:{' '}
+                <span className={`font-bold ${attemptsLeft === 1 ? 'text-red-400' : 'text-amber-400'}`}>
+                  {attemptsLeft} lượt chọn
+                </span>
+              </span>
+            )}
           </div>
 
           <button
             type="button"
             onClick={closeQuestion}
-            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl transition-all ${isCompletedCorrect || isCompletedFailed
+              ? 'bg-amber-400/25 text-amber-300 hover:bg-amber-400/35 border border-amber-400/60 shadow-lg ring-2 ring-amber-400/40 scale-105'
+              : 'text-slate-400 hover:text-white hover:bg-white/10'
+              }`}
             title="Đóng câu hỏi (MC)"
           >
+            {(isCompletedCorrect || isCompletedFailed) && (
+              <span className="text-xs sm:text-sm font-bold hidden sm:inline">Đóng</span>
+            )}
             <X className="w-6 h-6 sm:w-7 sm:h-7" />
           </button>
         </div>
@@ -139,7 +159,8 @@ export default function QuestionModal() {
               correctAnswer === letter ||
               (question.status === 'completed_correct' && question.correctAnswer === letter);
             const isWrong = question.wrongAnswers.includes(letter);
-            const isDisabled = isWrong || isCorrect || isLocked;
+            const isDisabled =
+              isWrong || isCorrect || isLocked || isCompletedCorrect || isCompletedFailed;
 
             let btnClasses =
               'relative flex items-center gap-3 sm:gap-4 px-3.5 sm:px-5 py-2.5 sm:py-3 lg:py-3.5 rounded-xl sm:rounded-2xl border-2 text-left font-bold transition-all duration-150 min-h-[56px] sm:min-h-[64px] lg:min-h-[72px] ';
@@ -148,6 +169,8 @@ export default function QuestionModal() {
               btnClasses += 'bg-emerald-600 border-emerald-400 text-white shadow-[0_0_25px_rgba(16,185,129,0.5)] cursor-default';
             } else if (isWrong) {
               btnClasses += 'bg-red-700/85 border-red-500 text-white cursor-not-allowed opacity-80';
+            } else if (isLocked || isCompletedCorrect || isCompletedFailed) {
+              btnClasses += 'bg-slate-800/50 border-slate-700/60 text-slate-400 cursor-not-allowed opacity-60';
             } else {
               btnClasses +=
                 'bg-slate-800/95 hover:bg-slate-700/95 border-slate-600/80 hover:border-amber-400 text-white cursor-pointer active:scale-[0.99]';
@@ -165,11 +188,12 @@ export default function QuestionModal() {
                 <span
                   className={`
                     w-8 h-8 sm:w-10 sm:h-10 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center font-black text-base sm:text-lg lg:text-xl shrink-0 shadow-inner
-                    ${
-                      isCorrect
-                        ? 'bg-white text-emerald-700'
-                        : isWrong
-                          ? 'bg-red-950/70 text-red-200'
+                    ${isCorrect
+                      ? 'bg-white text-emerald-700'
+                      : isWrong
+                        ? 'bg-red-950/70 text-red-200'
+                        : isLocked || isCompletedCorrect || isCompletedFailed
+                          ? 'bg-white/5 text-slate-500'
                           : 'bg-white/10 text-amber-300'
                     }
                   `}

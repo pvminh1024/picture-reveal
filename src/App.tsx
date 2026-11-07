@@ -160,9 +160,12 @@ function App() {
 
         setState((prev) => {
           if (!prev.config) return prev;
+          const currentId = question.id;
+          const alreadyOpened = prev.openedTiles.includes(currentId);
           return {
             ...prev,
             config: { ...prev.config, questions: updatedQuestions },
+            openedTiles: alreadyOpened ? prev.openedTiles : [...prev.openedTiles, currentId],
           };
         });
 
