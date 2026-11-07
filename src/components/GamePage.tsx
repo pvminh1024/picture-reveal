@@ -42,7 +42,7 @@ export default function GamePage() {
           className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-wide"
         >
           <span className="bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500 bg-clip-text text-transparent drop-shadow-lg">
-            ✨ LẬT MẢNH GHÉP BÍ ẨN ✨
+            ✨ MẢNH GHÉP VĂN HÓA ✨
           </span>
         </motion.h1>
 
