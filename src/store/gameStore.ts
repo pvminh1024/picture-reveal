@@ -17,7 +17,13 @@ const DEMO_SIGNATURE = JSON.stringify(
   }))
 );
 
-export const DEFAULT_GAME_RULES = `Hình ảnh chủ đề được che bởi 9 mảnh ghép tương ứng với 9 câu hỏi, mỗi đội lần lượt chọn câu hỏi và đưa ra câu trả lời, trả lời đúng thì cộng 10 điểm, trả lời sai không mất điểm, 2 đội còn lại giành quyền trả lời, đội giành trả lời mà trả lời đúng thì được cộng 10 điểm, sai trừ 5 điểm. Sau mỗi mảnh ghép các đội được quyền Đoán chủ đề, đoán đúng +50 điểm, sai không trừ điểm. Mỗi đội có tối đa 3 lượt đoán chủ đề.
+export const DEFAULT_GAME_RULES = `Cấu trúc: 02 Chủ đề (Bức tranh ẩn), mỗi chủ đề gồm 09 mảnh ghép câu hỏi.\n
+Giành quyền: Cử 01 đại diện giơ tay nhanh nhất sau hiệu lệnh MC (Mỗi câu mỗi đội có 01 lượt trả lời).\n
+Điểm số :
+Trả lời ĐÚNG câu hỏi: +5 điểm & mở mảnh ghép. 
+Trả lời SAI: Nhường quyền cho đội còn lại (Cả 3 đội sai => Khóa ô).\n
+Sau khi trả lời xong 9 câu hỏi các đội có thể giơ tay để trả lời câu chủ đề.
+Giải mã ĐÚNG Chủ đề ẩn: +20 điểm/chủ đề.\n
 
 *Lưu ý, kết quả cuối cùng dựa vào BTC!!*`;
 
